@@ -1,6 +1,6 @@
 # Location Tracking App
 
-Bu proje, bir Android uygulaması için **location tracking** (konum takibi) özelliğini geliştirmek amacıyla hazırlanmıştır. Uygulama, konum verilerini almak, takip etmek ve kaydetmek için çeşitli işlevlere sahiptir.
+Bu proje, bir Android uygulaması için **location tracking** (konum takibi) özelliğini geliştirmek amacıyla hazırlanmıştır. Uygulama, Google Maps API kullanarak konum verilerini almak, takip etmek ve kaydetmek için çeşitli işlevlere sahiptir.
 
 ## Özellikler
 
