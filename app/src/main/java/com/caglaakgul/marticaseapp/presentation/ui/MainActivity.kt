@@ -1,28 +1,30 @@
 package com.caglaakgul.marticaseapp.presentation.ui
 
+
 import android.Manifest
-import android.annotation.SuppressLint
 import android.content.pm.PackageManager
+import android.graphics.Color
 import android.location.Geocoder
+import android.location.Location
 import android.os.Bundle
-import android.os.Looper
-import android.util.Log
+import android.widget.Toast
+import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope
 import com.caglaakgul.marticaseapp.R
 import com.caglaakgul.marticaseapp.databinding.ActivityMainBinding
-import com.google.android.gms.location.FusedLocationProviderClient
-import com.google.android.gms.location.LocationCallback
-import com.google.android.gms.location.LocationRequest
-import com.google.android.gms.location.LocationResult
+import com.caglaakgul.marticaseapp.presentation.viewmodel.MapViewModel
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.GoogleMap
 import com.google.android.gms.maps.OnMapReadyCallback
 import com.google.android.gms.maps.SupportMapFragment
+import com.google.android.gms.maps.model.CircleOptions
 import com.google.android.gms.maps.model.LatLng
 import com.google.android.gms.maps.model.MarkerOptions
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.launch
 import java.util.Locale
 
 @AndroidEntryPoint
@@ -30,95 +32,108 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
 
     private lateinit var binding: ActivityMainBinding
     private lateinit var mMap: GoogleMap
-    private lateinit var fusedLocationClient: FusedLocationProviderClient
-    private lateinit var locationRequest: LocationRequest
-    private lateinit var locationCallback: LocationCallback
+    private val viewModel: MapViewModel by viewModels()
+    private var isTracking = false
+
+    private val fusedLocationClient by lazy {
+        LocationServices.getFusedLocationProviderClient(this)
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
-        setupLocationUpdates()
-        setupMap()
-    }
-
-    private fun setupMap() {
         val mapFragment = supportFragmentManager.findFragmentById(R.id.mapFragment) as SupportMapFragment
         mapFragment.getMapAsync(this)
+
+        binding.btnStart.setOnClickListener {
+            isTracking = true
+            Toast.makeText(this, "Takip başlatıldı", Toast.LENGTH_SHORT).show()
+            viewModel.startLocationUpdates()
+        }
+
+        binding.btnStop.setOnClickListener {
+            isTracking = false
+            Toast.makeText(this, "Takip durduruldu", Toast.LENGTH_SHORT).show()
+            viewModel.stopLocationUpdates()
+        }
+
+        binding.btnReset.setOnClickListener {
+            viewModel.clearSavedLocations()
+            mMap.clear()
+            Toast.makeText(this, "Tüm veriler sıfırlandı!", Toast.LENGTH_SHORT).show()
+        }
     }
 
     override fun onMapReady(googleMap: GoogleMap) {
         mMap = googleMap
         mMap.uiSettings.isZoomControlsEnabled = true
+        enableMyLocation()
+        observeLocationUpdates()
 
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
-            mMap.isMyLocationEnabled = true
-            getLastKnownLocation()
-            startLocationUpdates()
-        } else {
-            requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION), 1001)
+        mMap.setOnMarkerClickListener { marker ->
+            val address = getAddress(marker.position)
+            Toast.makeText(this, "Address: $address", Toast.LENGTH_SHORT).show()
+            true
         }
+
+        getLastKnownLocation()
     }
 
-    @SuppressLint("MissingPermission")
     private fun getLastKnownLocation() {
-        fusedLocationClient.lastLocation.addOnSuccessListener { location ->
-            if (location != null) {
-                val latLng = LatLng(location.latitude, location.longitude)
-                Log.d("MainActivity", "Last location: $latLng")
-                moveCameraToLocation(latLng)
-            } else {
-                startLocationUpdates()
-            }
-        }.addOnFailureListener { e ->
-            Log.e("MainActivity", "Error: ${e.message}")
-        }
-    }
-
-    private fun moveCameraToLocation(latLng: LatLng) {
-        val address = getAddress(latLng)
-        mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(latLng, 18f))
-        mMap.addMarker(MarkerOptions().position(latLng).title(address))
-    }
-
-    private fun setupLocationUpdates() {
-        locationRequest = LocationRequest.create().apply {
-            priority = LocationRequest.PRIORITY_HIGH_ACCURACY
-            interval = 5000
-            fastestInterval = 2000
-        }
-
-        locationCallback = object : LocationCallback() {
-            override fun onLocationResult(locationResult: LocationResult) {
-                super.onLocationResult(locationResult)
-                val location = locationResult.lastLocation
-                if (location != null) {
-                    val latLng = LatLng(location.latitude, location.longitude)
-                    moveCameraToLocation(latLng)
-                    Log.d("MainActivity", "Location: $latLng")
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+            fusedLocationClient.lastLocation.addOnSuccessListener { location: Location? ->
+                location?.let {
+                    val latLng = LatLng(it.latitude, it.longitude)
+                    mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(latLng, 18f))
                 }
             }
         }
     }
 
-    @SuppressLint("MissingPermission")
-    private fun startLocationUpdates() {
-        fusedLocationClient.requestLocationUpdates(locationRequest, locationCallback, Looper.getMainLooper())
-    }
-
-    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == 1001 && grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-            getLastKnownLocation()
-            startLocationUpdates()
+    private fun enableMyLocation() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+            mMap.isMyLocationEnabled = true
+        } else {
+            requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION), 1001)
         }
     }
 
-    override fun onDestroy() {
-        super.onDestroy()
-        fusedLocationClient.removeLocationUpdates(locationCallback)
+    private fun observeLocationUpdates() {
+        lifecycleScope.launch {
+            viewModel.locationFlow.collect { location ->
+                val latLng = LatLng(location.latitude, location.longitude)
+                mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(latLng, 18f))
+                drawUserLocation(latLng)
+
+                if (isTracking) {
+                    addMarker(latLng)
+                }
+            }
+        }
+
+        lifecycleScope.launch {
+            viewModel.savedLocations.collect { locations ->
+                locations.forEach { loc ->
+                    val latLng = LatLng(loc.latitude, loc.longitude)
+                    mMap.addMarker(MarkerOptions().position(latLng))
+                }
+            }
+        }
+    }
+
+    private fun drawUserLocation(latLng: LatLng) {
+        val circleOptions = CircleOptions()
+            .center(latLng)
+            .radius(10.0)
+            .strokeColor(Color.BLUE)
+            .fillColor(Color.argb(70, 50, 50, 255))
+        mMap.addCircle(circleOptions)
+    }
+
+    private fun addMarker(latLng: LatLng) {
+        mMap.addMarker(MarkerOptions().position(latLng))
     }
 
     private fun getAddress(latLng: LatLng): String {
@@ -127,7 +142,7 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
             geocoder.getFromLocation(latLng.latitude, latLng.longitude, 1)
                 ?.firstOrNull()
                 ?.getAddressLine(0)
-                ?: "Address not found"
+                ?: "Address not found!"
         } catch (e: Exception) {
             "Address not available"
         }

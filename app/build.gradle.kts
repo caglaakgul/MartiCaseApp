@@ -70,4 +70,8 @@ dependencies {
     //google maps
     implementation(libs.play.services.maps)
     implementation(libs.play.services.location)
+
+    implementation(libs.room.runtime)
+    kapt(libs.androidx.room.compiler)
+    implementation(libs.androidx.room.ktx)
 }

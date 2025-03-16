@@ -2,6 +2,8 @@ package com.caglaakgul.marticaseapp.di
 
 
 import android.content.Context
+import androidx.room.Room
+import com.caglaakgul.marticaseapp.data.local.entity.LocationDatabase
 import com.caglaakgul.marticaseapp.domain.repository.LocationRepository
 import com.caglaakgul.marticaseapp.domain.repository.LocationRepositoryImpl
 import dagger.Module
@@ -17,7 +19,17 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideLocationRepository(@ApplicationContext context: Context): LocationRepository {
-        return LocationRepositoryImpl(context)
+    fun provideLocationRepository(@ApplicationContext context: Context, database: LocationDatabase): LocationRepository {
+        return LocationRepositoryImpl(context, database)
+    }
+
+    @Provides
+    @Singleton
+    fun provideLocationDatabase(@ApplicationContext context: Context): LocationDatabase {
+        return Room.databaseBuilder(
+            context,
+            LocationDatabase::class.java,
+            "location_db"
+        ).build()
     }
 }
